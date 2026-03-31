@@ -1,0 +1,36 @@
+services:
+  streamlit:
+    build: .
+    command:
+      - streamlit
+      - run
+      - ui/app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+    ports:
+      - "8501:8501"
+    environment:
+      MCP_SERVER_URL: http://mcp:8000
+      LANGGRAPH_API_URL: http://langgraph:8001
+    depends_on:
+      - mcp
+      - langgraph
+
+  mcp:
+    build: .
+    command: ["python", "-m", "mcp_server.server"]
+    ports:
+      - "8000:8000"
+    environment:
+      MCP_TRANSPORT: sse
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+
+  langgraph:
+    build: .
+    command: ["python", "-m", "agentic_core.graph"]
+    ports:
+      - "8001:8001"
+    environment:
+      LANGGRAPH_HOST: 0.0.0.0
+      LANGGRAPH_PORT: "8001"
