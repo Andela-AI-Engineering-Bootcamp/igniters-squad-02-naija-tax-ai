@@ -28,8 +28,10 @@ Custom **FastMCP** server (`mcp_server/`) exposes tools used by the agents:
 |------|------|
 | `scrub_pii` | Masks BVN/NUBAN-like sequences in text (see `mcp_server/tools/pii_scrubber.py`). |
 | `parse_bank_pdf` | Extracts tables (Camelot) or page text (PyMuPDF) from bank PDFs (`mcp_server/tools/bank_parser.py`). |
+| `query_nigerian_tax_law` | Finance Act retrieval via Chroma (`mcp_server/tools/tax_rag.py`; stub until the vector collection is wired). |
+| `attach_chrome_cdp` | CDP attach to user Chrome (`mcp_server/tools/browser_tools.py`; stub until Playwright is wired). |
 
-Implementation modules are also referred to as `pii_scrubber` and `bank_parser` in squad ownership below.
+Implementation modules are also referred to as `pii_scrubber`, `bank_parser`, `tax_rag`, and `browser_tools` in squad ownership below.
 
 ### Diagram
 
@@ -109,7 +111,7 @@ All services share the same `Dockerfile` so dependencies and OS libraries stay a
 
 | Pod | Area | Ownership |
 |-----|------|-----------|
-| **POD A** | `mcp_server/` | MCP tools: `pii_scrubber`, `bank_parser`, server wiring |
+| **POD A** | `mcp_server/` | MCP tools: `pii_scrubber`, `bank_parser`, `tax_rag`, `browser_tools`, server wiring |
 | **POD B** | `agentic_core/` | LangGraph state, schemas, nodes (Guardian / Strategist / Sidekick), `graph.py` |
 | **POD C** | `ui/` | Streamlit app, file upload, chat & HITL components |
 | **Shared** | `utils/` | Guardrails, exceptions, PII-safe logging |
