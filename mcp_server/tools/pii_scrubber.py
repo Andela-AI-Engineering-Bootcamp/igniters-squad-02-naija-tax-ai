@@ -6,36 +6,8 @@ import re
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
-from pydantic import BaseModel, Field
+from utils.scrubber import PIIData, PIIScrubber, _NUBAN, _BVN, _EMAIL, _mask_known_values, _nonempty_pii_values
 
-_BVN = re.compile(r"\b(\d{11})\b")
-_NUBAN = re.compile(r"\b(\d{10})\b")
-_EMAIL = re.compile(
-    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
-    re.IGNORECASE,
-)
-_ADDRESS = re.compile(r"\b([A-Za-z0-9\s]+, [A-Za-z0-9\s]+, [A-Za-z0-9\s]+)\b")
-
-
-class PIIData(BaseModel):
-    bvn: str = ""
-    nuban: str = ""
-    phone_number: str = ""
-    email: str = ""
-    address: str = ""
-    name: str = ""
-    date_of_birth: str = ""
-    gender: str = ""
-    nationality: str = ""
-    town: str = ""
-
-
-class PIIScrubber(BaseModel):
-    scrubbed_text: str = Field(
-        default="",
-        description="User text with every identified PII substring removed or replaced.",
-    )
-    pii_data: PIIData
 
 
 def scrub_text(text: str, mask: str = "***") -> str:
@@ -45,29 +17,6 @@ def scrub_text(text: str, mask: str = "***") -> str:
     out = _NUBAN.sub(mask, out)
     out = _EMAIL.sub(mask, out)
 
-    return out
-
-
-def _nonempty_pii_values(pii: PIIData) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for raw in pii.model_dump().values():
-        if not isinstance(raw, str):
-            continue
-        v = raw.strip()
-        if len(v) < 2:
-            continue
-        if v not in seen:
-            seen.add(v)
-            ordered.append(v)
-    ordered.sort(key=len, reverse=True)
-    return ordered
-
-
-def _mask_known_values(text: str, values: list[str], mask: str) -> str:
-    out = text
-    for val in values:
-        out = re.sub(re.escape(val), mask, out, flags=re.IGNORECASE)
     return out
 
 
@@ -121,9 +70,8 @@ if __name__ == "__main__":
         "My address is Ikeja City Mall, Lagos"
     )
     result = extract_pii_with_ollama(_sample)
-    print(result)
     assert "08031234567" not in result.scrubbed_text
     assert "12345678901" not in result.scrubbed_text
     assert "1234567890" not in result.scrubbed_text
-    # assert "Ikeja" not in result.scrubbed_text
+    assert "Ikeja" not in result.scrubbed_text
     print(result)
