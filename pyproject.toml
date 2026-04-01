@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "naija-tax-ai"
+version = "0.1.0"
+description = "Naija Tax AI (squad project)"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.hatch.build.targets.wheel]
+packages = ["utils", "mcp_server", "agentic_core", "ui"]
