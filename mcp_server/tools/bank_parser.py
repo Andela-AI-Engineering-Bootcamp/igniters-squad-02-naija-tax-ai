@@ -1,16 +1,29 @@
-"""PyMuPDF + Camelot helpers for table extraction from bank PDFs."""
+from datetime import datetime, timezone
 
-from __future__ import annotations
-
+import fitz
+import camelot
 from pathlib import Path
 from typing import Any
-
-import fitz  # PyMuPDF
-
+from agents import Agent, OpenAIChatCompletionsModel, Runner, trace
+from agents.mcp import MCPServerStdio, create_static_tool_filter
+from models.bank_statement_models import BankStatementDocument
 from utils.exceptions import TableExtractionError, UnreadablePDFError
+from utils.config import openrouter_client
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+OUTPUT_DIR = PROJECT_ROOT / "output"
 
 
-def _text_fallback(path: Path) -> list[dict[str, Any]]:
+def dump_json_file(pdf_path: Path, content: str) -> Path:
+    """Store the extracted information to JSON file"""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out_path = OUTPUT_DIR / f"{pdf_path.stem}_{stamp}.json"
+    out_path.write_text(content, encoding="utf-8")
+    return out_path
+
+
+def text_fallback(path: Path) -> list[dict[str, Any]]:
     """Extract plain text per page when table libraries fail."""
     doc = fitz.open(path)
     try:
@@ -22,50 +35,83 @@ def _text_fallback(path: Path) -> list[dict[str, Any]]:
         doc.close()
 
 
-def extract_tables_from_pdf(pdf_path: str) -> dict[str, Any]:
+async def extract_tables_from_pdf(pdf_path: str) -> dict[str, Any]:
     """
-    Try Camelot lattice/stream for tables; fall back to PyMuPDF text per page.
+    Extract tables from uploaded PDF
     """
     path = Path(pdf_path)
     if not path.is_file():
         raise UnreadablePDFError(f"File not found: {pdf_path}")
 
-    try:
-        import camelot  # lazy: heavy dependency
-    except ImportError as e:
-        return {
-            "source": "pymupdf",
-            "tables": [],
-            "pages": _text_fallback(path),
-            "note": f"Camelot unavailable: {e}",
-        }
-
     tables_out: list[dict[str, Any]] = []
     try:
-        for flavor in ("lattice", "stream"):
-            try:
-                tables = camelot.read_pdf(str(path), pages="all", flavor=flavor)
-                for t in tables:
-                    tables_out.append(
-                        {
-                            "flavor": flavor,
-                            "page": int(t.page),
-                            "shape": getattr(t, "shape", None),
-                            "data": t.df.to_dict(orient="records"),
-                        }
-                    )
-                if tables_out:
-                    break
-            except Exception:
-                continue
-    except Exception as exc:
-        raise TableExtractionError(str(exc)) from exc
+        tables = camelot.read_pdf(str(path), pages="all")
+        for t in tables:
+            tables_out.append(
+                {
+                    "page": int(t.page),
+                    "shape": getattr(t, "shape", None),
+                    "data": t.df.to_dict(orient="records"),
+                }
+            )
+    except Exception as ex:
+        if ex == TableExtractionError:
+            raise TableExtractionError(str(ex)) from ex
+        if ex == UnreadablePDFError:
+            raise UnreadablePDFError(str(ex)) from ex
 
     if not tables_out:
         return {
             "source": "pymupdf_fallback",
             "tables": [],
-            "pages": _text_fallback(path),
+            "pages": text_fallback(path),
         }
 
     return {"source": "camelot", "tables": tables_out}
+
+
+async def bank_statement_parser_agent(pdf_path: Path) -> str:
+    params = {
+        "command": "uv",
+        "args": ["run", "mcp_server/server.py"],
+        "cwd": PROJECT_ROOT,
+    }
+
+    instructions = (
+        "You parse Nigerian bank statement PDFs. Call the parse_bank_pdf tool first with the given path "
+        "to obtain Camelot tables or per-page text. Then map rows into the required output schema: "
+        "header fields from the statement, and every transaction line with date, description, deposit, "
+        "withdrawal, and balance. Use 0.0 for deposit or withdrawal when that column is empty. "
+        "Use empty strings only when a header field is not present on the document."
+    )
+    request = (
+        "Extract a structured bank statement from this PDF. "
+        f"Call parse_bank_pdf with pdf_path set to: {pdf_path.resolve()}"
+    )
+
+    model = OpenAIChatCompletionsModel(
+        model="openai/gpt-4.1-mini",
+        openai_client=openrouter_client(),
+    )
+    bank_pdf_tools = create_static_tool_filter(allowed_tool_names=["parse_bank_pdf"])
+    async with MCPServerStdio(
+        params=params,
+        client_session_timeout_seconds=30,
+        tool_filter=bank_pdf_tools,
+    ) as server:
+        agent = Agent(
+            name="bank_statement_parser",
+            instructions=instructions,
+            model=model,
+            mcp_servers=[server],
+            output_type=BankStatementDocument,
+        )
+        with trace("bank_statement_parser"):
+            result = await Runner.run(agent, request)
+            final = result.final_output
+            if isinstance(final, BankStatementDocument):
+                json_str = final.model_dump_json(indent=2)
+            else:
+                json_str = str(final)
+            dump_json_file(pdf_path, json_str)
+            return f"File Saved Successfully"
