@@ -1,0 +1,38 @@
+{
+  "TIN": {
+    "full_name": "Tax Identification Number",
+    "description": "Unique taxpayer identifier issued by FIRS; often 10–12 digits on official correspondence.",
+    "synonyms": ["Tax ID", "Taxpayer ID", "JTB TIN"],
+    "profile_field": "tin"
+  },
+  "PAYE": {
+    "full_name": "Pay As You Earn",
+    "description": "Income tax deducted at source by an employer from salary or wages.",
+    "synonyms": ["P.A.Y.E.", "Paye tax", "Employment tax deducted"],
+    "profile_field": "paye_deducted"
+  },
+  "NHF": {
+    "full_name": "National Housing Fund",
+    "description": "Statutory housing-related contribution that may qualify as an allowable deduction where the Act permits.",
+    "synonyms": ["National Housing Fund contribution", "NHF contribution"],
+    "profile_field": "nhf_contribution"
+  },
+  "NHIS": {
+    "full_name": "National Health Insurance Scheme",
+    "description": "Health insurance premiums paid under NHIS or similar schemes, where deductible under applicable rules.",
+    "synonyms": ["NHIS premium", "Health insurance", "National Health Insurance"],
+    "profile_field": "nhis_premium"
+  },
+  "CRA": {
+    "full_name": "Consolidated Relief Allowance",
+    "description": "Personal relief computed under the Finance Act rules before tax on chargeable income.",
+    "synonyms": ["Consolidated Relief", "Personal relief", "CRA"],
+    "profile_field": "_computed_in_strategist"
+  },
+  "WHT": {
+    "full_name": "Withholding Tax",
+    "description": "Tax withheld at source on qualifying payments; may be credited against final liability where applicable.",
+    "synonyms": ["Withholding tax credit", "WHT credit", "WHT suffered"],
+    "profile_field": "wht_credits"
+  }
+}

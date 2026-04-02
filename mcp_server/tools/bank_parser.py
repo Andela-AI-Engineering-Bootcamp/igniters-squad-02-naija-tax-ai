@@ -68,11 +68,20 @@ def _page_count_from_extracted(extracted: dict[str, Any]) -> int:
 
 async def extract_tables_from_pdf(pdf_path: str) -> dict[str, Any]:
     """Extract tables via Camelot, or per-page text via PyMuPDF when no tables."""
+    import os
+
     path = Path(pdf_path)
     if not path.is_file():
         raise UnreadablePDFError(f"File not found: {pdf_path}")
 
     _ensure_pdf_readable(path)
+
+    if os.environ.get("NAIJA_SKIP_CAMELOT") == "1":
+        return {
+            "source": "pymupdf_fallback",
+            "tables": [],
+            "pages": text_fallback(path),
+        }
 
     tables_out: list[dict[str, Any]] = []
     try:
