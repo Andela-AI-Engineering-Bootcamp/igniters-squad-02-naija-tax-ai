@@ -3,7 +3,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp_server.tools.bank_parser import extract_tables_from_pdf
 from mcp_server.tools.browser_tools import (
     connect_cdp_session,
+    dynamic_inject as dynamic_inject_impl,
     launch_firs_portal as launch_firs_portal_impl,
+    map_active_form as map_active_form_impl,
 )
 from mcp_server.tools.pii_scrubber import scrub_text
 from mcp_server.tools.tax_rag import query_tax_law
@@ -43,6 +45,18 @@ def attach_chrome_cdp(cdp_http_url: str) -> dict:
 def launch_firs_portal(url: str | None = None) -> dict:
     """Launch visible Google Chrome to FIRS TaxPromax; session is kept for map_active_form / dynamic_inject."""
     return launch_firs_portal_impl(url=url)
+
+
+@mcp.tool()
+def map_active_form() -> dict:
+    """Semantic DOM map of visible input, select, textarea, and button controls (labels + CSS selectors)."""
+    return map_active_form_impl()
+
+
+@mcp.tool()
+def dynamic_inject(selector: str, value: str) -> dict:
+    """Set a field value by CSS selector and highlight it in light green for the user."""
+    return dynamic_inject_impl(selector, value)
 
 
 def main() -> None:

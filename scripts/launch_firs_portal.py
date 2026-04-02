@@ -11,7 +11,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from mcp_server.tools.browser_tools import close_firs_session, launch_firs_portal
+from mcp_server.tools import map_active_form, close_firs_session, launch_firs_portal
 
 
 def main() -> None:
@@ -19,6 +19,15 @@ def main() -> None:
     print(result)
     if result.get("status") != "ok":
         raise SystemExit(1)
+
+    try:
+        input("Press any button to read input on the page\n")
+
+        data = map_active_form()
+        print(data)
+    except Exception:
+        pass
+
     try:
         input("Press Enter to close the browser and exit…\n")
     except EOFError:
