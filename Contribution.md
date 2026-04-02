@@ -63,6 +63,8 @@ pip install -r requirements.txt
 playwright install chrome
 ```
 
+**MCP server (deterministic tools):** Tool handlers in `mcp_server/` must not call LLMs. Run the server with `python -m mcp_server.server` (or `uv run python -m mcp_server.server`). Set `MCP_HOST` (default `127.0.0.1`), `MCP_PORT` (default `8000`), and `MCP_TRANSPORT` (`stdio` or `sse`) to match how Pod B connects LangGraph. Add Finance Act plain-text sources under `data/finance_acts/` for `query_nigerian_tax_law`; the first query builds a local Chroma index under `.cache/chroma_tax_law`.
+
 ---
 
 ## 🏗️ 3. Understanding the Architecture

@@ -1,26 +1,27 @@
-from datetime import datetime, timezone
+"""Deterministic bank-statement PDF extraction (PyMuPDF / Camelot). No LLM."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
 
 import fitz
 import camelot
-from pathlib import Path
-from typing import Any
-from agents import Agent, OpenAIChatCompletionsModel, Runner, trace
-from agents.mcp import MCPServerStdio, create_static_tool_filter
-from models.bank_statement_models import BankStatementDocument
-from utils.exceptions import TableExtractionError, UnreadablePDFError
-from utils.config import openrouter_client
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-OUTPUT_DIR = PROJECT_ROOT / "output"
+from mcp_server.tools.pii_scrubber import scrub_text
+from utils.exceptions import UnreadablePDFError
 
 
-def dump_json_file(pdf_path: Path, content: str) -> Path:
-    """Store the extracted information to JSON file"""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_path = OUTPUT_DIR / f"{pdf_path.stem}_{stamp}.json"
-    out_path.write_text(content, encoding="utf-8")
-    return out_path
+def _ensure_pdf_readable(path: Path) -> None:
+    try:
+        doc = fitz.open(path)
+    except Exception as e:
+        raise UnreadablePDFError(f"Cannot open PDF: {e}") from e
+    try:
+        if len(doc) == 0:
+            raise UnreadablePDFError("PDF has no pages")
+    finally:
+        doc.close()
 
 
 def text_fallback(path: Path) -> list[dict[str, Any]]:
@@ -35,13 +36,43 @@ def text_fallback(path: Path) -> list[dict[str, Any]]:
         doc.close()
 
 
+def _flatten_extracted_to_text(extracted: dict[str, Any]) -> str:
+    tables = extracted.get("tables") or []
+    if tables:
+        lines: list[str] = []
+        for t in tables:
+            for row in t.get("data") or []:
+                if isinstance(row, dict):
+                    cells = [
+                        str(v)
+                        for v in row.values()
+                        if v is not None and str(v).strip()
+                    ]
+                else:
+                    cells = [str(row)]
+                lines.append(" ".join(cells))
+        return "\n".join(lines)
+    pages = extracted.get("pages") or []
+    return "\n\n".join(p.get("text", "") for p in pages)
+
+
+def _page_count_from_extracted(extracted: dict[str, Any]) -> int:
+    pages = extracted.get("pages") or []
+    if pages:
+        return len(pages)
+    tables = extracted.get("tables") or []
+    if tables:
+        return max(int(t.get("page", 1)) for t in tables)
+    return 0
+
+
 async def extract_tables_from_pdf(pdf_path: str) -> dict[str, Any]:
-    """
-    Extract tables from uploaded PDF
-    """
+    """Extract tables via Camelot, or per-page text via PyMuPDF when no tables."""
     path = Path(pdf_path)
     if not path.is_file():
         raise UnreadablePDFError(f"File not found: {pdf_path}")
+
+    _ensure_pdf_readable(path)
 
     tables_out: list[dict[str, Any]] = []
     try:
@@ -54,11 +85,8 @@ async def extract_tables_from_pdf(pdf_path: str) -> dict[str, Any]:
                     "data": t.df.to_dict(orient="records"),
                 }
             )
-    except Exception as ex:
-        if ex == TableExtractionError:
-            raise TableExtractionError(str(ex)) from ex
-        if ex == UnreadablePDFError:
-            raise UnreadablePDFError(str(ex)) from ex
+    except Exception:
+        tables_out = []
 
     if not tables_out:
         return {
@@ -70,48 +98,34 @@ async def extract_tables_from_pdf(pdf_path: str) -> dict[str, Any]:
     return {"source": "camelot", "tables": tables_out}
 
 
-async def bank_statement_parser_agent(pdf_path: Path) -> str:
-    params = {
-        "command": "uv",
-        "args": ["run", "mcp_server/server.py"],
-        "cwd": PROJECT_ROOT,
+async def parse_and_scrub(pdf_path: str) -> dict[str, Any]:
+    """
+    Extract text from a bank-statement PDF and mask PII (regex only).
+
+    Returns a JSON-serializable dict; does not raise for invalid PDFs (MCP-safe).
+    """
+    path = Path((pdf_path or "").strip())
+    if not path.is_file():
+        return {
+            "status": "error",
+            "error": "unreadable_pdf",
+            "detail": f"File not found: {pdf_path}",
+        }
+
+    try:
+        extracted = await extract_tables_from_pdf(pdf_path)
+    except UnreadablePDFError as e:
+        return {
+            "status": "error",
+            "error": "unreadable_pdf",
+            "detail": str(e),
+        }
+
+    raw = _flatten_extracted_to_text(extracted)
+    scrubbed = scrub_text(raw)
+    return {
+        "status": "ok",
+        "scrubbed_text": scrubbed,
+        "source": extracted.get("source", "unknown"),
+        "page_count": _page_count_from_extracted(extracted),
     }
-
-    instructions = (
-        "You parse Nigerian bank statement PDFs. Call the parse_bank_pdf tool first with the given path "
-        "to obtain Camelot tables or per-page text. Then map rows into the required output schema: "
-        "header fields from the statement, and every transaction line with date, description, deposit, "
-        "withdrawal, and balance. Use 0.0 for deposit or withdrawal when that column is empty. "
-        "Use empty strings only when a header field is not present on the document."
-    )
-    request = (
-        "Extract a structured bank statement from this PDF. "
-        f"Call parse_bank_pdf with pdf_path set to: {pdf_path.resolve()}"
-    )
-
-    model = OpenAIChatCompletionsModel(
-        model="openai/gpt-4.1-mini",
-        openai_client=openrouter_client(),
-    )
-    bank_pdf_tools = create_static_tool_filter(allowed_tool_names=["parse_bank_pdf"])
-    async with MCPServerStdio(
-        params=params,
-        client_session_timeout_seconds=30,
-        tool_filter=bank_pdf_tools,
-    ) as server:
-        agent = Agent(
-            name="bank_statement_parser",
-            instructions=instructions,
-            model=model,
-            mcp_servers=[server],
-            output_type=BankStatementDocument,
-        )
-        with trace("bank_statement_parser"):
-            result = await Runner.run(agent, request)
-            final = result.final_output
-            if isinstance(final, BankStatementDocument):
-                json_str = final.model_dump_json(indent=2)
-            else:
-                json_str = str(final)
-            dump_json_file(pdf_path, json_str)
-            return f"File Saved Successfully"

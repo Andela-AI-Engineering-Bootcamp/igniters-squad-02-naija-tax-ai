@@ -1,6 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.tools.bank_parser import extract_tables_from_pdf
+from mcp_server.tools.bank_parser import extract_tables_from_pdf, parse_and_scrub as parse_and_scrub_impl
 from mcp_server.tools.browser_tools import (
     connect_cdp_session,
     dynamic_inject as dynamic_inject_impl,
@@ -27,6 +27,12 @@ def scrub_pii(text: str) -> str:
 async def parse_bank_pdf(pdf_path: str) -> dict:
     """Extract tables (Camelot) or page text (PyMuPDF) from a bank statement PDF."""
     return await extract_tables_from_pdf(pdf_path)
+
+
+@mcp.tool()
+async def parse_and_scrub(pdf_path: str) -> dict:
+    """Extract text from a bank PDF and return regex-scrubbed content (BVN, NUBAN, phones, email)."""
+    return await parse_and_scrub_impl(pdf_path)
 
 
 @mcp.tool()

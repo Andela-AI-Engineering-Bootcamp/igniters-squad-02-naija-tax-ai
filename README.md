@@ -22,14 +22,18 @@ Orchestration uses **LangGraph** with a linear `guardian → strategist → side
 
 ### MCP server
 
-Custom **FastMCP** server (`mcp_server/`) exposes tools used by the agents:
+Custom **FastMCP** server (`mcp_server/server.py`) exposes **deterministic** tools (no LLM calls inside handlers). Configure host, port, and transport with `MCP_HOST`, `MCP_PORT`, and `MCP_TRANSPORT` (see `utils/config.py`). Run locally, for example: `python -m mcp_server.server` from the repo root with your venv activated.
 
 | Tool | Role |
 |------|------|
-| `scrub_pii` | Masks BVN/NUBAN-like sequences in text (see `mcp_server/tools/pii_scrubber.py`). |
-| `parse_bank_pdf` | Extracts tables (Camelot) or page text (PyMuPDF) from bank PDFs (`mcp_server/tools/bank_parser.py`). |
-| `query_nigerian_tax_law` | Finance Act retrieval via Chroma (`mcp_server/tools/tax_rag.py`; stub until the vector collection is wired). |
-| `attach_chrome_cdp` | CDP attach to user Chrome (`mcp_server/tools/browser_tools.py`; stub until Playwright is wired). |
+| `parse_and_scrub` | **Primary bank PDF path:** extracts text (Camelot or PyMuPDF), then regex-masks BVN/NUBAN/phones/email (`mcp_server/tools/bank_parser.py`). |
+| `scrub_pii` | Masks the same patterns in arbitrary user-supplied text. |
+| `parse_bank_pdf` | Lower-level extraction: tables or per-page text (no scrubbing). |
+| `query_nigerian_tax_law` | Chroma vector retrieval over `data/finance_acts/*.txt` (`mcp_server/tools/tax_rag.py`). |
+| `launch_firs_portal`, `map_active_form`, `dynamic_inject` | Visible Chrome session and FIRS form helpers (`mcp_server/tools/browser_tools.py`). |
+| `attach_chrome_cdp` | CDP attach stub for future use. |
+
+Optional LLM-based helpers (not imported by the MCP server) live in `agentic_core/bank_statement_llm.py` and `utils/llm_pii_optional.py`.
 
 Implementation modules are also referred to as `pii_scrubber`, `bank_parser`, `tax_rag`, and `browser_tools` in squad ownership below.
 

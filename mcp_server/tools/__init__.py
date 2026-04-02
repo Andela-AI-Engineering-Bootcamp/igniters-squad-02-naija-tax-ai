@@ -1,6 +1,6 @@
 """MCP tool implementations."""
 
-from mcp_server.tools.bank_parser import extract_tables_from_pdf
+from mcp_server.tools.bank_parser import extract_tables_from_pdf, parse_and_scrub
 from mcp_server.tools.browser_tools import (
     close_firs_session,
     connect_cdp_session,
@@ -22,6 +22,7 @@ __all__ = [
     "launch_firs_portal",
     "map_active_form",
     "extract_tables_from_pdf",
+    "parse_and_scrub",
     "query_tax_law",
     "scrub_text",
 ]
