@@ -34,13 +34,18 @@
 * **Description:** Wrap the tools from A1 through A5 using the OpenAI SDK's MCP server implementation. Ensure the server runs locally on a stable port so Pod B can connect their LangGraph agents to it.
 * **Deliverable:** A running `server.py` file.
 
+### Task A7: The "TaxPromax" Rosetta Stone Dictionary
+* **Description:** While Task A4 dynamically maps the active browser form, the LLM still needs to know what those fields mean in a Nigerian context. Create a static JSON dictionary (`pit_dictionary.json`) under the MCP server package (e.g. `mcp_server/data/`). The dictionary must define standard Nigerian tax terms and abbreviations so agents can cross-reference them during the injection phase.
+* **Required keys to map (minimum):** `TIN`, `PAYE`, `NHF`, `NHIS`, `CRA`, `WHT` (each with human-readable definitions and optional synonyms / Form A label hints).
+* **Deliverable:** A static JSON reference file the Sidekick agent can load to resolve TaxPromax acronyms when matching live DOM labels to Pydantic fields.
+
 ---
 
 ## 🧠 Pod B: Agentic Core & Orchestration (LangGraph)
 **Focus:** Defining state, engineering prompts, and orchestrating the multi-agent workflow.
 
 ### Task B1: Define Global State & Data Schemas
-* **Description:** Create `state.py` to define the LangGraph `TypedDict` (memory). Create `schemas.py` using Pydantic to strictly type the `CleanIncomeProfile` and `TaxLiabilityReport` to ensure predictable agent outputs.
+* **Description:** Create `state.py` to define the LangGraph `TypedDict` (memory). Create `schemas.py` using Pydantic to strictly type filing-oriented profiles and outputs (see **B6** for the full `NigerianPITProfile` model and **`TaxLiabilityReport`**) so agent outputs are predictable.
 * **Deliverable:** The central data contracts that Pod A and Pod C will use to integrate their work.
 
 ### Task B2: The Guardian Agent Node (Intake)
@@ -58,6 +63,14 @@
 ### Task B5: Graph Compilation & HITL Breakpoints
 * **Description:** Wire the Guardian, Strategist, and Sidekick nodes together in `graph.py`. Insert LangGraph `interrupt` breakpoints before the browser launches and *before* the user is told to click the final submit button.
 * **Deliverable:** The compiled, runnable LangGraph state machine.
+
+### Task B6: Comprehensive PIT Pydantic Schema (`schemas.py`)
+* **Description:** Extend `schemas.py` with a **`NigerianPITProfile`** model that includes mandatory and optional fields needed for Nigerian Personal Income Tax (Form A / Finance Act–aligned filing), not just what a bank statement provides. Use clear defaults (e.g. `0.0`) and `Optional[...]` where the user may genuinely have no value (e.g. TIN). Cover identity (TIN), income sources (salary, trade, dividends, rent), statutory reliefs (pension, NHF, NHIS, life assurance), and taxes already paid (PAYE, WHT credits).
+* **Deliverable:** A strictly typed structure so agents know which variables are required for calculation and injection, and which still need user input.
+
+### Task B7: The "Missing Context" Interview Loop (Guardian Agent)
+* **Description:** A bank statement shows income flows but usually **not** life assurance, NHIS, NHF, or full pension detail. After parsing the PDF into `NigerianPITProfile`, the Guardian must detect empty or unknown tax-reducing fields and trigger a LangGraph interrupt to ask the user (e.g. whether they wish to declare life assurance or NHIS premiums to reduce liability). Merge answers into state before the Strategist runs.
+* **Deliverable:** An interview step that proactively hunts for legal deductions before calculation.
 
 ---
 
