@@ -1,7 +1,10 @@
 from mcp.server.fastmcp import FastMCP
 
 from mcp_server.tools.bank_parser import extract_tables_from_pdf
-from mcp_server.tools.browser_tools import connect_cdp_session
+from mcp_server.tools.browser_tools import (
+    connect_cdp_session,
+    launch_firs_portal as launch_firs_portal_impl,
+)
 from mcp_server.tools.pii_scrubber import scrub_text
 from mcp_server.tools.tax_rag import query_tax_law
 from utils.config import MCP_HOST, MCP_PORT, MCP_TRANSPORT
@@ -34,6 +37,12 @@ def query_nigerian_tax_law(query: str, top_k: int = 5) -> dict:
 def attach_chrome_cdp(cdp_http_url: str) -> dict:
     """Attach to Chrome via CDP HTTP endpoint (e.g. http://127.0.0.1:9222). Stub until Playwright is wired."""
     return connect_cdp_session(cdp_http_url)
+
+
+@mcp.tool()
+def launch_firs_portal(url: str | None = None) -> dict:
+    """Launch visible Google Chrome to FIRS TaxPromax; session is kept for map_active_form / dynamic_inject."""
+    return launch_firs_portal_impl(url=url)
 
 
 def main() -> None:

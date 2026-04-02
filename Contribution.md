@@ -60,7 +60,7 @@ pip install -r requirements.txt
 **Crucial Playwright Step:** Because our Sidekick Agent uses Playwright to interact with the FIRS portal, you must install the local browser binaries:
 
 ```bash
-playwright install chromium
+playwright install chrome
 ```
 
 ---
